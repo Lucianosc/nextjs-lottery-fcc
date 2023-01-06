@@ -1,128 +1,149 @@
-import React, { useEffect, useState } from "react";
-import { useWeb3Contract } from "react-moralis";
-import abi from "../constants/abi.json";
 import contractAddresses from "../constants/contractAddresses.json";
-import { ethers } from "ethers";
-import { useMoralis } from "react-moralis";
+import abi from "../constants/abi.json";
+
+// dont export from moralis when using react
+import { useMoralis, useWeb3Contract } from "react-moralis";
+import { useEffect, useState } from "react";
 import { useNotification } from "web3uikit";
+import { ethers } from "ethers";
 
 export default function LotteryEntrance() {
-  const { chainId: chainIdHex, isWeb3Enabled } = useMoralis(); // response the Chain Id in hexadecimal
-  const dispatch = useNotification();
+  const { Moralis, isWeb3Enabled, chainId: chainIdHex } = useMoralis();
+  // These get re-rendered every time due to our connect button!
   const chainId = parseInt(chainIdHex);
   const lotteryAddress =
     chainId in contractAddresses ? contractAddresses[chainId][0] : null;
 
-  const [entranceFee, setEntranceFee] = useState();
-  const [numPlayers, setNumPlayers] = useState();
-  const [recentWinner, setRecentWinner] = useState();
+  const [entranceFee, setEntranceFee] = useState("0");
+  const [numberOfPlayers, setNumberOfPlayers] = useState("0");
+  const [recentWinner, setRecentWinner] = useState("0");
 
-  // const checkEvent = async () => {
-  //   const provider = new ethers.providers.EtherscanProvider([
-  //     "localhost",
-  //     [process.env.ETHERSCAN_API_KEY],
-  //   ]);
-  //   const contract = new ethers.Contract(lotteryAddress, abi, provider);
+  const dispatch = useNotification();
 
-  //   contract.on("Transfer", (from, to, value, event) => {
-  //     let transferEvent = {
-  //       from: from,
-  //       to: to,
-  //       value: value,
-  //       eventData: event,
-  //     };
-
-  //     console.log(JSON.stringify(transferEvent, null, 4));
-  //   });
-  // };
-  // checkEvent();
-  // console.log(process.env.ETHERSCAN_API_KEY);
-
-  const { runContractFunction: enterLottery } = useWeb3Contract({
-    contractAddress: lotteryAddress,
+  const {
+    runContractFunction: enterLottery,
+    data: enterTxResponse,
+    isLoading,
+    isFetching,
+  } = useWeb3Contract({
     abi: abi,
+    contractAddress: lotteryAddress,
     functionName: "enterLottery",
-    params: {},
     msgValue: entranceFee,
+    params: {},
   });
 
+  /* View Functions */
+
   const { runContractFunction: getEntranceFee } = useWeb3Contract({
-    contractAddress: lotteryAddress,
     abi: abi,
+    contractAddress: lotteryAddress, // specify the networkId
     functionName: "getEntranceFee",
     params: {},
   });
 
-  const { runContractFunction: getNumberOfPlayers } = useWeb3Contract({
-    contractAddress: lotteryAddress,
+  const { runContractFunction: getPlayersNumber } = useWeb3Contract({
     abi: abi,
+    contractAddress: lotteryAddress,
     functionName: "getNumberOfPlayers",
     params: {},
   });
 
   const { runContractFunction: getRecentWinner } = useWeb3Contract({
-    contractAddress: lotteryAddress,
     abi: abi,
+    contractAddress: lotteryAddress,
     functionName: "getRecentWinner",
     params: {},
   });
 
-  const updateUi = async () => {
-    const entranceFeeCall = (await getEntranceFee()).toString();
-    const numberOfPlayersCall = (await getNumberOfPlayers()).toString();
-    const recentWinnerCall = (await getRecentWinner()).toString();
-    setEntranceFee(entranceFeeCall);
-    setNumPlayers(numberOfPlayersCall);
-    setRecentWinner(recentWinnerCall);
-  };
+  async function updateUIValues() {
+    // Another way we could make a contract call:
+    // const options = { abi, contractAddress: lotteryAddress }
+    // const fee = await Moralis.executeFunction({
+    //     functionName: "getEntranceFee",
+    //     ...options,
+    // })
+    const entranceFeeFromCall = (await getEntranceFee()).toString();
+    const numPlayersFromCall = (await getPlayersNumber()).toString();
+    const recentWinnerFromCall = await getRecentWinner();
+    setEntranceFee(entranceFeeFromCall);
+    setNumberOfPlayers(numPlayersFromCall);
+    setRecentWinner(recentWinnerFromCall);
+  }
 
   useEffect(() => {
     if (isWeb3Enabled) {
-      updateUi();
+      updateUIValues();
     }
   }, [isWeb3Enabled]);
+  // no list means it'll update everytime anything changes or happens
+  // empty list means it'll run once after the initial rendering
+  // and dependencies mean it'll run whenever those things in the list change
 
-  const handleSuccess = async (tx) => {
-    await tx.wait(1);
-    handleNewNotification(tx);
-    updateUi();
-  };
+  // An example filter for listening for events, we will learn more on this next Front end lesson
+  // const filter = {
+  //     address: lotteryAddress,
+  //     topics: [
+  //         // the name of the event, parnetheses containing the data type of each event, no spaces
+  //         utils.id("LotteryEnter(address)"),
+  //     ],
+  // }
 
-  const handleNewNotification = (tx) => {
+  const handleNewNotification = () => {
     dispatch({
       type: "info",
-      message: "Transaction complete!",
-      title: "Tx Notification",
+      message: "Transaction Complete!",
+      title: "Transaction Notification",
       position: "topR",
       icon: "bell",
     });
   };
 
+  const handleSuccess = async (tx) => {
+    try {
+      await tx.wait(1);
+      updateUIValues();
+      handleNewNotification(tx);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
   return (
-    <div>
-      LotteryEntrance
+    <div className="max-w-screen-xl mx-auto p-5">
+      <h3 className="py-4 px-4 font-blog text-2xl">Lottery entrance</h3>
       {lotteryAddress ? (
-        <div>
+        <div className="px-4">
           <button
-            onClick={async () => {
+            className="my-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded ml-auto disabled:bg-gray-400"
+            onClick={async () =>
               await enterLottery({
-                // contract functions comes with onSuccess, onError, onComplete, etc
+                // onComplete:
+                // onError:
                 onSuccess: handleSuccess,
                 onError: (error) => console.log(error),
-              });
-            }}
+              })
+            }
+            disabled={isLoading || isFetching}
           >
-            Enter Lottery
+            {isLoading || isFetching ? (
+              <div className="animate-spin spinner-border h-8 w-8 border-b-2 rounded-full"></div>
+            ) : (
+              "Enter Lottery"
+            )}
           </button>
-          <div>
-            Entrance Fee: {entranceFee && ethers.utils.formatEther(entranceFee)}{" "}
-            ETH
+          <div className="my-1">
+            Entrance Fee: {ethers.utils.formatUnits(entranceFee, "ether")} ETH
           </div>
-          <div>Players: {numPlayers && numPlayers}</div>
-          <div>Last Winner: {recentWinner && recentWinner}</div>
+          <div className="my-1">
+            The current number of players is: {numberOfPlayers}
+          </div>
+          <div className="my-1">
+            The most previous winner was: {recentWinner}
+          </div>
         </div>
       ) : (
-        <div>No Lottery Address detected</div>
+        <div className="px-4">Please connect to a supported chain </div>
       )}
     </div>
   );
