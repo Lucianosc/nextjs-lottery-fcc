@@ -14,9 +14,9 @@ export default function LotteryEntrance() {
   const lotteryAddress =
     chainId in contractAddresses ? contractAddresses[chainId][0] : null;
 
-  const [entranceFee, setEntranceFee] = useState("0");
-  const [numberOfPlayers, setNumberOfPlayers] = useState("0");
-  const [recentWinner, setRecentWinner] = useState("0");
+  const [entranceFee, setEntranceFee] = useState();
+  const [numberOfPlayers, setNumberOfPlayers] = useState();
+  const [recentWinner, setRecentWinner] = useState();
 
   const dispatch = useNotification();
 
@@ -133,7 +133,8 @@ export default function LotteryEntrance() {
             )}
           </button>
           <div className="my-1">
-            Entrance Fee: {ethers.utils.formatUnits(entranceFee, "ether")} ETH
+            Entrance Fee:{" "}
+            {entranceFee && ethers.utils.formatUnits(entranceFee, "ether")} ETH
           </div>
           <div className="my-1">
             The current number of players is: {numberOfPlayers}
